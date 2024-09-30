@@ -1,12 +1,11 @@
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
-import { uploadOnAzure } from "../utils/azure.js";
+import { uploadOnCloud } from "../utils/cloud.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 const registerUser = asyncHandler(async (req, res) => {
   const { fullName, email, username, password } = req.body;
-  // check if req.body is empty
   if (Object.keys(req.body).length === 0)
     throw new ApiError(400, "didnt receive ay data");
   // validation
@@ -28,33 +27,35 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "avatar file is missing");
   }
 
-  // const avatar = await uploadOnAzure(avatarLocalPath);
+  // const avatar = await uploadOnCloud(avatarLocalPath);
   // let coverImage;
   // if (coverLocalPath) {
-  //   coverImage = uploadOnAzure(coverLocalPath);
+  //   coverImage = uploadOnCloud(coverLocalPath);
   // }
   let avatar;
   try {
-    avatar = await uploadOnAzure(avatarLocalPath);
-    console.log("uploaded avatar");
+    avatar = await uploadOnCloud(avatarLocalPath);
+    console.log("uploaded avatar", avatar);
   } catch (error) {
     console.log("error uploading avatar to azure", error);
     throw new ApiError(400, "failed to upload avatar");
   }
   let coverImage;
-  try {
-    coverImage = await uploadOnAzure(coverLocalPath);
-    console.log("uploaded coverImage");
-  } catch (error) {
-    console.log("error uploading coverImage to azure", error);
-    throw new ApiError(400, "failed to upload coverImage");
+  if (coverLocalPath) {
+    try {
+      coverImage = await uploadOnCloud(coverLocalPath);
+      console.log("uploaded coverImage", coverImage);
+    } catch (error) {
+      console.log("error uploading coverImage to azure", error);
+      throw new ApiError(400, "failed to upload coverImage");
+    }
   }
 
   try {
     const user = await User.create({
       fullName,
-      avatar: avatar.url,
-      coverImage: coverImage?.url || "",
+      avatar,
+      coverImage,
       email,
       password,
       username,
