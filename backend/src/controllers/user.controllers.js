@@ -1,7 +1,7 @@
 import { ApiError } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { User } from "../models/user.model.js";
-import { uploadOnCloud } from "../utils/cloud.js";
+import { deleteFromCloud, uploadOnCloud } from "../utils/cloud.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 
 const registerUser = asyncHandler(async (req, res) => {
@@ -34,7 +34,7 @@ const registerUser = asyncHandler(async (req, res) => {
   // }
   let avatar;
   try {
-    avatar = await uploadOnCloud(avatarLocalPath);
+    avatar = await uploadOnCloud(avatarLocalPath, `${username}_avatar.jpg`);
     console.log("uploaded avatar", avatar);
   } catch (error) {
     console.log("error uploading avatar to azure", error);
@@ -43,7 +43,10 @@ const registerUser = asyncHandler(async (req, res) => {
   let coverImage;
   if (coverLocalPath) {
     try {
-      coverImage = await uploadOnCloud(coverLocalPath);
+      coverImage = await uploadOnCloud(
+        coverLocalPath,
+        `${username}_coverImage.jpg`
+      );
       console.log("uploaded coverImage", coverImage);
     } catch (error) {
       console.log("error uploading coverImage to azure", error);
@@ -76,6 +79,11 @@ const registerUser = asyncHandler(async (req, res) => {
     console.log("user creation failed");
     if (avatar) {
       // todo delete it from azure & similalry for coverImage
+      await deleteFromCloud(`${username}_avatar.jpg`);
+    }
+    if (coverImage) {
+      // todo delete it from azure & similalry for coverImage
+      await deleteFromCloud(`${username}_coverImage.jpg`);
     }
     throw new ApiError(
       500,

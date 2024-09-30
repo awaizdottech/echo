@@ -20,11 +20,11 @@ async function uploadImage(blobName, localFilePath) {
   return blobClient.url;
 }
 
-const uploadOnCloud = async (localFilePath) => {
+const uploadOnCloud = async (localFilePath, blobName) => {
   try {
     if (!localFilePath) return null;
     // upload On Azure
-    const azureResponse = await uploadImage("check.png", localFilePath);
+    const azureResponse = await uploadImage(blobName, localFilePath);
     fs.unlinkSync(localFilePath);
     return azureResponse;
   } catch (error) {
