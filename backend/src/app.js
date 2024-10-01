@@ -20,6 +20,7 @@ app.use(
 );
 
 // routes
+// todo active users, updating avatar & coverimage
 app.use("/api/v1/healthcheck", healthCheckRouter);
 app.use("/api/v1/users", userRouter);
 app.use(errorHandler);
