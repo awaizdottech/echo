@@ -15,7 +15,7 @@ const userSchema = new Schema(
       required: true,
       unique: true,
     },
-    fullName: {
+    fullname: {
       type: String,
       index: true,
     },
@@ -61,7 +61,7 @@ userSchema.methods.generateAccessToken = function () {
       _id: this._id,
       username: this.username,
       email: this.email,
-      fullName: this.fullName,
+      fullname: this.fullname,
       // we can save anything we want here
     },
     process.env.ACCESS_TOKEN_SECRET,

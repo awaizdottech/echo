@@ -5,7 +5,7 @@ class ApiResponse {
     this.statusCode = statusCode;
     this.data = data;
     this.message = message;
-    this.success = statusCode < 400; // learn about status code ranges to understand this
+    this.success = statusCode < 400; // todo learn about status code ranges to understand this
   }
 }
 

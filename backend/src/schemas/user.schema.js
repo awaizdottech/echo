@@ -9,7 +9,7 @@ const fileSchema=z.object({
 export const userSchema=z.object({
     username:z.string().toLowerCase().trim().min(8).max(15, { message: "it cannot be empty" }),
     email:z.email({ message: "it cannot be empty" }),
-    fullName:z.string().toLowerCase().trim().min(8).max(15, { message: "it cannot be empty" }),
+    fullname:z.string().toLowerCase().trim().min(8).max(15, { message: "it cannot be empty" }),
     avatar:fileSchema,
     coverImage:fileSchema,
     password:z.string().trim().min(8).max(15, { message: "it cannot be empty" }),

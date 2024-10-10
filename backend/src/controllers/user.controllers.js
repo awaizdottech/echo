@@ -21,13 +21,15 @@ const generateAccessAndRefreshToken = async (userId) => {
 };
 
 const registerUser = asyncHandler(async (req, res) => {
-  const { fullName, email, username, password } = req.body;
+  const { fullname, email, username, password } = req.body;
   if (Object.keys(req.body).length === 0)
     throw new ApiError(400, "didnt receive ay data");
   // validation
   // todo: implement zod or some library here instead of manually checking schema received
   if (
-    [fullName, username, email, password].some((feild) => feild?.trim() === "")
+    [fullname, username, email, password].some(
+      (field) => typeof field !== "string" || field.trim() === ""
+    )
   ) {
     throw new ApiError(400, "All fields are required");
   }
@@ -43,11 +45,6 @@ const registerUser = asyncHandler(async (req, res) => {
     throw new ApiError(400, "avatar file is missing");
   }
 
-  // const avatar = await uploadOnCloud(avatarLocalPath);
-  // let coverImage;
-  // if (coverLocalPath) {
-  //   coverImage = uploadOnCloud(coverLocalPath);
-  // }
   let avatar;
   try {
     avatar = await uploadOnCloud(avatarLocalPath, `${username}_avatar.jpg`);
@@ -72,7 +69,7 @@ const registerUser = asyncHandler(async (req, res) => {
 
   try {
     const user = await User.create({
-      fullName,
+      fullname,
       avatar,
       coverImage,
       email,
@@ -232,13 +229,13 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-  const { fullName, email } = req.body;
-  if (!fullName || !email)
+  const { fullname, email } = req.body;
+  if (!fullname || !email)
     throw new ApiError(400, "fullname & email are required");
 
   const user = User.findByIdAndUpdate(
     req.user?._id,
-    { $set: { fullName, email } },
+    { $set: { fullname, email } },
     { new: true }.select("-password -refreshToken")
   );
 
@@ -291,6 +288,125 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "coverImage updated successfully"));
 });
 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  if (!username?.trim()) throw new ApiError(400, "username is required");
+
+  const channel = await User.aggregate([
+    {
+      $match: {
+        username: username?.toLowerCase(),
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      },
+    },
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+    {
+      $addFields: {
+        subscribersCount: {
+          $size: "$subscribers",
+        },
+        channelsSubscribedToCount: {
+          $size: "$subscribedTo",
+        },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] }, // tells if the current user is subscribed to the channel whose info is being fetched
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+    {
+      // project only required data
+      $project: {
+        fullname: 1,
+        username: 1,
+        avatar: 1,
+        subscribersCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+  if (!channel?.length) throw new ApiError(404, "channel not found");
+
+  return res
+    .status(200)
+    .json(new ApiResponse(200, channel[0], "channel data found"));
+});
+
+const getWatchHistory = asyncHandler(async (req, res) => {
+  const user = await User.aggregate([
+    {
+      $match: {
+        _id: new mongoose.Types.ObjectId(req.user?._id),
+      },
+    },
+    {
+      $lookup: {
+        from: "videos",
+        localField: "watchHistory",
+        foreignField: "_id",
+        as: "watchHistory",
+        pipeline: [
+          {
+            $lookup: {
+              from: "users",
+              localField: "owner",
+              foreignField: "_id",
+              as: "owner",
+              pipeline: [
+                {
+                  $project: {
+                    fullname: 1,
+                    username: 1,
+                    avatar: 1,
+                  },
+                },
+              ],
+            },
+          },
+          {
+            $addFields: {
+              owner: {
+                $first: "$owner",
+              },
+            },
+          },
+        ],
+      },
+    },
+  ]);
+  if (!user) throw new ApiError(404, "watch history couldnt be found");
+
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(
+        200,
+        user?.[0]?.watchHistory,
+        "watch history fetched successfully"
+      )
+    );
+});
+
 export {
   registerUser,
   generateAccessAndRefreshToken,
@@ -302,4 +418,6 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getWatchHistory,
+  getUserChannelProfile,
 };
