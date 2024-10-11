@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { deleteFromCloud, uploadOnCloud } from "../utils/cloud.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import fs from "fs";
 
 const generateAccessAndRefreshToken = async (userId) => {
   try {
@@ -12,7 +13,9 @@ const generateAccessAndRefreshToken = async (userId) => {
     const accessToken = user.generateAccessToken();
     const refreshToken = user.generateRefreshToken();
 
+    console.log("ac", accessToken, "rf", refreshToken);
     user.refreshToken = refreshToken;
+    console.log(user);
     await user.save({ validateBeforeSave: false });
     return { accessToken, refreshToken };
   } catch (error) {
@@ -23,7 +26,7 @@ const generateAccessAndRefreshToken = async (userId) => {
 const registerUser = asyncHandler(async (req, res) => {
   const { fullname, email, username, password } = req.body;
   if (Object.keys(req.body).length === 0)
-    throw new ApiError(400, "didnt receive ay data");
+    throw new ApiError(400, "didnt receive any data");
   // validation
   // todo: implement zod or some library here instead of manually checking schema received
   if (
@@ -33,16 +36,19 @@ const registerUser = asyncHandler(async (req, res) => {
   ) {
     throw new ApiError(400, "All fields are required");
   }
-  const existedUser = await User.findOne({ $or: [{ username }, { email }] });
-  if (existedUser) {
-    throw new ApiError(409, "User with email or username already exists");
-  }
 
   const avatarLocalPath = req.files?.avatar?.[0]?.path;
   const coverLocalPath = req.files?.coverImage?.[0]?.path;
 
   if (!avatarLocalPath) {
     throw new ApiError(400, "avatar file is missing");
+  }
+
+  const existedUser = await User.findOne({ $or: [{ username }, { email }] });
+  if (existedUser) {
+    fs.unlinkSync(avatarLocalPath);
+    if (coverLocalPath) fs.unlinkSync(coverLocalPath);
+    throw new ApiError(409, "User with email or username already exists");
   }
 
   let avatar;
@@ -109,7 +115,7 @@ const loginUser = asyncHandler(async (req, res) => {
   const { email, username, password } = req.body;
   // todo more validation needed
   if (!email) throw new ApiError(400, "email is required");
-
+  // todo as we're finding user either from username or email if one of them is wrong there's no error
   const user = await User.findOne({ $or: [{ username }, { email }] });
   if (!user) throw new ApiError(400, "user not found");
 
@@ -120,9 +126,9 @@ const loginUser = asyncHandler(async (req, res) => {
     user._id
   );
 
-  const loggedInUser = await user
-    .findById(user._id)
-    .select("-password -refreshToken");
+  const loggedInUser = await User.findById(user._id).select(
+    "-password -refreshToken"
+  );
   // todo check for loggedInUser
 
   const options = {
@@ -132,7 +138,7 @@ const loginUser = asyncHandler(async (req, res) => {
 
   return res
     .status(200)
-    .cookie("accessToken", accessToken, options) // cookies cantbe set in mobile apps
+    .cookie("accessToken", accessToken, options) // cookies cant be set in mobile apps
     .cookie("refreshToken", refreshToken, options)
     .json(
       new ApiResponse(
@@ -144,21 +150,22 @@ const loginUser = asyncHandler(async (req, res) => {
 });
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-  const incomingRefrehToken = req.cookies.refreshToken || req.body.refreshToken; // it'll come in body from mobile app
+  const incomingRefreshToken =
+    req.cookies.refreshToken || req.body.refreshToken; // it'll come in body from mobile app
 
-  if (!incomingRefrehToken)
+  if (!incomingRefreshToken)
     throw new ApiError(401, "refresh token is required");
 
   try {
     const decodedToken = jwt.verify(
-      incomingRefrehToken,
+      incomingRefreshToken,
       process.env.REFRESH_TOKEN_SECRET
     );
 
     const user = await User.findById(decodedToken?._id);
     if (!user) throw new ApiError(401, "invalid refresh token");
 
-    if (incomingRefrehToken !== user?.refreshToken)
+    if (incomingRefreshToken !== user?.refreshToken)
       throw new ApiError(401, "invalid refresh token");
 
     const options = {
@@ -180,6 +187,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
         )
       );
   } catch (error) {
+    if (error instanceof ApiError) throw error;
     throw new ApiError(
       500,
       "something went wrong while refreshing access token"
@@ -206,12 +214,11 @@ const logoutUser = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, {}, "user logged out successfully"));
 });
 
-const changeCurrentPassword = asyncHandler(async (req, res) => {
+const updateCurrentPassword = asyncHandler(async (req, res) => {
   const { oldPassword, newPassword } = req.body;
   const user = await User.findById(req.user?._id);
 
-  const isPasswordValid = user.isPasswordCorrect(oldPassword);
-
+  const isPasswordValid = await user.isPasswordCorrect(oldPassword);
   if (!isPasswordValid) throw new ApiError(401, "Old password is incorrect");
 
   user.password = newPassword;
@@ -233,11 +240,11 @@ const updateAccountDetails = asyncHandler(async (req, res) => {
   if (!fullname || !email)
     throw new ApiError(400, "fullname & email are required");
 
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user?._id,
     { $set: { fullname, email } },
-    { new: true }.select("-password -refreshToken")
-  );
+    { new: true }
+  ).select("-password -refreshToken");
 
   return res
     .status(200)
@@ -413,7 +420,7 @@ export {
   loginUser,
   refreshAccessToken,
   logoutUser,
-  changeCurrentPassword,
+  updateCurrentPassword,
   getCurrentUser,
   updateAccountDetails,
   updateUserAvatar,
