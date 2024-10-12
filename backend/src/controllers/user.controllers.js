@@ -197,7 +197,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
 const logoutUser = asyncHandler(async (req, res) => {
   await User.findByIdAndUpdate(req.user._id, {
-    $set: { refreshToken: undefined }, // undefined may not work, depends on the version of mongodb
+    $unset: { refreshToken: 1 }, // removes feild from mongo
   }),
     { new: true };
 
