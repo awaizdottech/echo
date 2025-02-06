@@ -45,7 +45,7 @@ const userSchema = new Schema(
 
 userSchema.pre("save", async function (next) {
   // never use arrow function, it causes a lot of trouble
-  if (!this.isModified("password")) return next();
+  if (!this.isModified("password")) return next(); // when updating other fields
   this.password = await bcrypt.hash(this.password, 10);
 });
 
@@ -71,7 +71,6 @@ userSchema.methods.generateAccessToken = function () {
 };
 
 userSchema.methods.generateRefreshToken = function () {
-  // short lived access token
   return jwt.sign(
     {
       _id: this._id,
